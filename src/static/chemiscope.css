@@ -509,3 +509,23 @@
     column-gap: 1em;
     margin: 0.5em 0;
 }
+
+.chsp-atom-extra-options {
+    display: grid;
+    align-items: center;
+    justify-items: center;
+    grid-template-columns: auto 1fr 1fr;
+    column-gap: 1em;
+}
+
+.chsp-atom-extra-options > * {
+    margin: 0.5em 0;
+}
+
+.chsp-atom-extra-options label {
+    min-width: auto;
+}
+
+.chsp-atom-extra-options {
+    grid-column: 1 / span 2;
+}

@@ -21,7 +21,8 @@ import {
     SphereData,
 } from './shapes';
 
-import { MapData } from '../map/data';
+import { MapData, NumericProperty } from '../map/data';
+import { MapOptions } from '../map/options';
 import { EnvironmentIndexer } from '../indexer';
 import { StructureOptions } from './options';
 
@@ -182,6 +183,8 @@ export class MoleculeViewer {
     private _data: MapData;
     // environment indexer
     private _indexer: EnvironmentIndexer;
+    /// Button used to reset the range of color axis
+    private _colorReset: HTMLButtonElement;
     /**
      * Create a new `MoleculeViewer` inside the HTML DOM element with the given `id`.
      *
@@ -262,6 +265,7 @@ export class MoleculeViewer {
             noEnvsStyle,
             noShapeStyle,
         ];
+        this._colorReset = this._options.getModalElement<HTMLButtonElement>('atom-color-reset');
 
         this._connectOptions();
         this._trajectoryOptions = this._options.getModalElement('trajectory-settings-group');
@@ -816,9 +820,39 @@ export class MoleculeViewer {
             restyleAndRender();
         });
 
-        this._options.color.property.onchange.push(() => {
+        // this._options.color.property.onchange.push(() => {
+        //     if (this._options.color.property.value !== 'element') {
+        //         this._options.color.mode.enable();
+        //         if (this._properties !== undefined) {
+        //             if (
+        //                 this._properties.some((record) =>
+        //                     Object.values(record).some((v) => v === undefined)
+        //                 )
+        //             ) {
+        //                 sendWarning(
+        //                     'The selected structure has undefined properties for some atoms, these atoms will still be colored by element.'
+        //                 );
+        //             }
+        //         }
+        //     } else {
+        //         this._options.color.mode.disable();
+        //         this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
+        //     }
+        //     restyleAndRender();
+        // });
+        // this._options.color.mode.onchange.push(restyleAndRender);
+
+        // ======= color axis settings
+        // setup state when the property changes
+        const ColorPropertyChanges = () => {
             if (this._options.color.property.value !== 'element') {
-                this._options.color.map.enable();
+                this._options.color.mode.enable();
+                this._options.color.min.enable();
+                this._options.color.max.enable();
+
+                this._colorReset.disabled = false;
+                this._options.palette.enable();
+
                 if (this._properties !== undefined) {
                     if (
                         this._properties.some((record) =>
@@ -830,13 +864,178 @@ export class MoleculeViewer {
                         );
                     }
                 }
+
+                // const values = this._colors(0)[0] as number[];
+                // Color mode warning needs to be called before setting min and max to avoid isFinite error
+                // if (canChangeColors(values, 'property')) {
+                    // const { min, max } = arrayMaxMin(values);
+                const [min, max] = $3Dmol.getPropertyRange(
+                    this._current?.model.selectedAtoms({}),
+                    this._options.color.property.value
+                ) as [number, number];
+                // We have to set max first and min second here to avoid sending
+                // a spurious warning in `colorRangeChange` below in case the
+                // new min is bigger than the old max.
+                this._options.color.min.value = Number.NEGATIVE_INFINITY;
+                this._options.color.max.value = max;
+                this._options.color.min.value = min;
+                this._setScaleStep([min, max], 'color');
+                // this._relayout({
+                //     'coloraxis.colorbar.title.text': this._colorTitle(),
+                //     'coloraxis.showscale': true,
+                // } as unknown as Layout);
+                // }
             } else {
-                this._options.color.map.disable();
+                this._options.color.mode.disable();
+                this._options.color.min.disable();
+                this._options.color.max.disable();
+
+                this._colorReset.disabled = true;
+                this._options.palette.disable();
+
+                this._options.color.min.value = 0;
+                this._options.color.max.value = 0;
+
+                // this._relayout({
+                //     'coloraxis.colorbar.title.text': undefined,
+                //     'coloraxis.showscale': false,
+                // } as unknown as Layout);
+
                 this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
             }
             restyleAndRender();
+        };
+        this._options.color.property.onchange.push(ColorPropertyChanges);
+
+        const colorRangeChange = (minOrMax: 'min' | 'max') => {
+            const min = this._options.color.min.value;
+            const max = this._options.color.max.value;
+            if (min > max) {
+                sendWarning(
+                    `The inserted min and max values in color are such that min > max! The last inserted value was reset.`
+                );
+                if (minOrMax === 'min') {
+                    this._options.color.min.reset();
+                } else {
+                    this._options.color.max.reset();
+                }
+                return;
+            }
+
+            // this._relayout({
+            //     'coloraxis.cmax': max,
+            //     'coloraxis.cmin': min,
+            //     // looks like changing only 'coloraxis.cmax'/'coloraxis.cmin' do
+            //     // not update the color of the points (although it does change
+            //     // the colorbar). Asking for an update of 'coloraxis.colorscale'
+            //     // seems to do the trick. This is possibly a Plotly bug, we
+            //     // would need to investigate a bit more.
+            //     'coloraxis.colorscale': this._options.colorScale(),
+            // } as unknown as Layout);
+        };
+
+        const canChangeColors = (values: number[], changed: string): boolean => {
+            const mode = this._options.color.mode.value;
+
+            let invalidValues = '';
+            if (mode === 'log' || mode === 'sqrt') {
+                invalidValues = '<= 0';
+            } else if (mode === 'inverse') {
+                invalidValues = '== 0';
+            }
+
+            const allValuesNaN = values.every((value) => isNaN(value));
+            const someValuesNaN = values.some((value) => isNaN(value));
+
+            if (allValuesNaN) {
+                sendWarning(
+                    `The selected property contains only values ${invalidValues}. ` +
+                        'To display this property, select an appropriate color scale. ' +
+                        `The ${changed} will be set to its last value.`
+                );
+
+                if (changed === 'property') {
+                    this._options.color.property.reset();
+                } else {
+                    this._options.color.mode.reset();
+                }
+
+                return false;
+            } else if (someValuesNaN) {
+                sendWarning(
+                    `The selected property contains some values ${invalidValues}. ` +
+                        'These values will be colored in grey.'
+                );
+                return true;
+            } else {
+                return true;
+            }
+        };
+
+        this._options.color.mode.onchange.push(() => {
+            const [min, max] = $3Dmol.getPropertyRange(
+                this._current?.model.selectedAtoms({}),
+                this._options.color.property.value
+            ) as [number, number];
+            // to avoid sending a spurious warning in `colorRangeChange` below
+            // in case the new min is bigger than the old max.
+            // const { min, max } = arrayMaxMin(values);
+            this._options.color.min.value = Number.NEGATIVE_INFINITY;
+            this._options.color.max.value = max;
+            this._options.color.min.value = min;
+            this._setScaleStep([min, max], 'color');
+            
+            // We have to set min to infinity first, then max, and then min here
+            // this._relayout({
+            //     'coloraxis.colorbar.title.text': this._colorTitle(),
+            //     'coloraxis.showscale': true,
+            // } as unknown as Layout);
+
+            // this._restyle(
+            //     {
+            //         hovertemplate: this._options.hovertemplate(),
+            //         'marker.color': this._colors(0),
+            //     },
+            //     [0]
+            // );
+            restyleAndRender();
         });
-        this._options.color.map.onchange.push(restyleAndRender);
+
+        this._options.color.min.onchange.push(() => {
+            colorRangeChange('min');
+            restyleAndRender();
+        });
+        this._options.color.max.onchange.push(() => {
+            colorRangeChange('max');
+            restyleAndRender();
+        });
+
+        const ResetColor = () => {
+            // const values = this._colors(0)[0] as number[];
+            // const { min, max } = arrayMaxMin(values);
+            const [min, max] = $3Dmol.getPropertyRange(
+                this._current?.model.selectedAtoms({}),
+                this._options.color.property.value
+            ) as [number, number];
+            this._options.color.min.value = min;
+            this._options.color.max.value = max;
+            // this._relayout({
+            //     'coloraxis.cmax': max,
+            //     'coloraxis.cmin': min,
+            //     // same as above regarding update of the points color
+            //     'coloraxis.colorscale': this._options.colorScale(),
+            // } as unknown as Layout);
+            restyleAndRender();
+        };
+        this._colorReset.addEventListener('click', ResetColor);
+
+        // ======= color palette
+        this._options.palette.onchange.push(() => {
+            // this._relayout({
+            //     'coloraxis.colorscale': this._options.colorScale(),
+            // } as unknown as Layout);
+            restyleAndRender();
+        });
 
         // Setup various buttons
         this._resetEnvCutoff = this._options.getModalElement<HTMLButtonElement>('env-reset');
@@ -903,6 +1102,8 @@ export class MoleculeViewer {
 
             this._viewer.render();
         };
+        // ResetColor();
+        // ColorPropertyChanges();
     }
 
     /**
@@ -1037,23 +1238,26 @@ export class MoleculeViewer {
      * highlighting a specific environment
      */
     private _mainStyle(): Partial<$3Dmol.AtomStyleSpec> {
-        const [min, max] = $3Dmol.getPropertyRange(
-            this._current?.model.selectedAtoms({}),
-            this._options.color.property.value
-        ) as [number, number];
-        let colorScheme: { prop: string; gradient: $3Dmol.Gradient } | undefined;
-        if (this._options.color.map.value === 'rwb') {
+        // const [min, max] = $3Dmol.getPropertyRange(
+        //     this._current?.model.selectedAtoms({}),
+        //     this._options.color.property.value
+        // ) as [number, number];
+        const [min, max]: [number, number] = [this._options.color.min.value, this._options.color.max.value];
+        let grad: $3Dmol.Gradient = new $3Dmol.Gradient.RWB(max, min);
+
+        if (this._options.palette.value === 'Rwb') {
             // min and max are swapped to ensure red is used for high values, blue for low values
-            colorScheme = {
-                prop: this._options.color.property.value,
-                gradient: new $3Dmol.Gradient.RWB(max, min),
-            };
-        } else if (this._options.color.map.value === 'sinebow') {
-            colorScheme = {
-                prop: this._options.color.property.value,
-                gradient: new $3Dmol.Gradient.Sinebow(max, min),
-            };
+            grad = new $3Dmol.Gradient.RWB(max, min);
+        } else if (this._options.palette.value === 'Roygb') {
+            grad = new $3Dmol.Gradient.ROYGB(max, min);
+        } else if (this._options.palette.value === 'Sinebow') {
+            grad = new $3Dmol.Gradient.Sinebow(max, min);
         }
+
+        const colorScheme: { prop: string; gradient: $3Dmol.Gradient } = {
+            prop: this._options.color.property.value,
+            gradient: grad,
+        };
 
         const style: Partial<$3Dmol.AtomStyleSpec> = {};
 
@@ -1335,4 +1539,47 @@ export class MoleculeViewer {
             }),
         };
     }
+
+    private _property(name: string): NumericProperty {
+        const result = this._data[this._indexer.mode][name];
+        if (result === undefined) {
+            throw Error(`unknown property '${name}' requested in map`);
+        }
+        return result;
+    }
+
+    /**
+     * Get the color values to use with the given plotly `trace`, or all of
+     * them if `trace === undefined`
+     */
+    // private _colors(trace?: number): Array<Array<string | number>> {
+    //     let colors;
+    //     if (this._options.hasColors()) {
+    //         colors = this._property(this._options.color.property.value).values;
+    //     } else {
+    //         colors = new Array(this._property(this._options.x.property.value).values.length).fill(
+    //             0.5
+    //         ) as number[];
+    //     }
+    //     const values = this._options.calculateColors(colors);
+    //     const selected = [];
+    //     for (const data of this._selected.values()) {
+    //         selected.push(data.color);
+    //     }
+
+    //     return this._selectTrace<Array<string | number>>(values, selected, trace);
+    // }
+
+    /** Changes the step of the arrow buttons in min/max input based on dataset range*/
+    private _setScaleStep(axisBounds: number[], name: 'x' | 'y' | 'z' | 'color'): void {
+        if (axisBounds !== undefined) {
+            // round to 10 decimal places so it does not break in Firefox
+            const step = Math.round(((axisBounds[1] - axisBounds[0]) / 20) * 10 ** 10) / 10 ** 10;
+            const minElement = this._options.getModalElement<HTMLInputElement>(`atom-${name}-min`);
+            const maxElement = this._options.getModalElement<HTMLInputElement>(`atom-${name}-max`);
+            minElement.step = `${step}`;
+            maxElement.step = `${step}`;
+        }
+    }
+
 }

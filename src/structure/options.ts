@@ -10,7 +10,9 @@ import Modal from '../modal';
 import { Settings } from '../dataset';
 import { HTMLOption, OptionsGroup } from '../options';
 import { optionValidator } from '../options';
-import { PositioningCallback, getByID, makeDraggable, sendWarning } from '../utils';
+import { PositioningCallback, arrayMaxMin, getByID, makeDraggable, sendWarning } from '../utils';
+
+// import { COLOR_MAPS } from '../map/colorscales';
 
 import BARS_SVG from '../static/bars.svg';
 import HTML_OPTIONS from './options.html.in';
@@ -54,8 +56,11 @@ export class StructureOptions extends OptionsGroup {
     };
     public color: {
         property: HTMLOption<'string'>;
-        map: HTMLOption<'string'>;
+        mode: HTMLOption<'string'>;
+        min: HTMLOption<'number'>;
+        max: HTMLOption<'number'>;
     };
+    public palette: HTMLOption<'string'>;
 
     /// The Modal instance
     private _modal: Modal;
@@ -103,14 +108,28 @@ export class StructureOptions extends OptionsGroup {
             cutoff: new HTMLOption('number', 4.0),
         };
 
+        const propertiesName = Object.keys(properties['atom']);
+        // assert(propertiesName.length >= 2);
+
+        this.palette = new HTMLOption('string', 'Rwb');
+        this.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
+        
         this.color = {
             property: new HTMLOption('string', 'element'),
-            map: new HTMLOption('string', 'rwb'),
+            min: new HTMLOption('number', 0),
+            max: new HTMLOption('number', 0),
+            mode: new HTMLOption('string', 'linear'),
         };
 
         // validate atom properties for coloring
-        const propertiesName = Object.keys(properties['atom']);
         this.color.property.validate = optionValidator(propertiesName.concat(['element']), 'color');
+        this.color.mode.validate = optionValidator(['linear', 'log', 'sqrt', 'inverse'], 'mode');
+
+        if (propertiesName.length > 2) {
+            this.color.property.value = propertiesName[2];
+        } else {
+            this.color.property.value = 'element';
+        }
 
         this.environments.bgColor.validate = optionValidator(
             ['grey', 'CPK'],
@@ -172,7 +191,83 @@ export class StructureOptions extends OptionsGroup {
             }
             delete settings.packedCell;
         }
+        if ('color' in settings) {
+            const color = settings.color as Settings;
+            if ('scale' in color) {
+                color.mode = color.scale;
+                delete color.scale;
+            }
+        }
         super.applySettings(settings);
+    }
+
+    /** Does the current plot use color values? */
+    public hasColors(): boolean {
+        return this.color.property.value !== '';
+    }
+
+    /** Get the plotly hovertemplate depending on `this._current.color` */
+    public hovertemplate(): string {
+        if (this.hasColors()) {
+            let property = this.color.property.value;
+            switch (this.color.mode.value) {
+                case 'inverse':
+                    property = `(${property})<sup>-1</sup>`;
+                    break;
+                case 'log':
+                    property = `log(${property})`;
+                    break;
+                case 'sqrt':
+                    property = `sqrt(${property})`;
+                    break;
+                case 'linear':
+                    break;
+                default:
+                    break;
+            }
+
+            return property + ': %{marker.color:.2f}<extra></extra>';
+        } else {
+            return '%{x:.2f}, %{y:.2f}<extra></extra>';
+        }
+    }
+
+    /**
+     * Get the values to use as colors according to the user-selected property
+     * and scale
+     */
+    public calculateColors(rawColors: number[]): Array<number | string> {
+        let scaleMode = this.color.mode.value;
+        const { min, max } = arrayMaxMin(rawColors);
+        if (max === min) {
+            scaleMode = 'fixed';
+        }
+
+        const values = rawColors.map((v: number) => {
+            let transformed = 0.5; // default
+            switch (scaleMode) {
+                case 'inverse':
+                    transformed = 1.0 / v;
+                    break;
+                case 'log':
+                    transformed = Math.log10(v);
+                    break;
+                case 'sqrt':
+                    transformed = Math.sqrt(v);
+                    break;
+                case 'linear':
+                    transformed = 1.0 * v;
+                    break;
+                default:
+                    // corresponds to 'constant'
+                    transformed = 0.5;
+                    break;
+            }
+
+            return isNaN(transformed) ? '#aaaaaa' : transformed;
+        });
+
+        return values;
     }
 
     /**
@@ -255,17 +350,38 @@ export class StructureOptions extends OptionsGroup {
         this.supercell[1].bind(this.getModalElement('supercell-b'), 'value');
         this.supercell[2].bind(this.getModalElement('supercell-c'), 'value');
 
-        const selectAtomColorProperty =
-            this.getModalElement<HTMLSelectElement>('atom-color-property');
-        // selectAtomColorProperty.options.length = 0;
-        // selectAtomColorProperty.options.add(new Option('element', ''));
-        for (const key in properties['atom']) {
-            selectAtomColorProperty.options.add(new Option(key, key));
-        }
-        this.color.property.bind(selectAtomColorProperty, 'value');
+        // const selectAtomColorProperty =
+        //     this.getModalElement<HTMLSelectElement>('atom-color-property');
+        // // selectAtomColorProperty.options.length = 0;
+        // // selectAtomColorProperty.options.add(new Option('element', ''));
+        // for (const key in properties['atom']) {
+        //     selectAtomColorProperty.options.add(new Option(key, key));
+        // }
+        // this.color.property.bind(selectAtomColorProperty, 'value');
 
-        const selectAtomColorMap = this.getModalElement<HTMLSelectElement>('atom-color-map');
-        this.color.map.bind(selectAtomColorMap, 'value');
+        // const selectAtomColorMap = this.getModalElement<HTMLSelectElement>('atom-color-map');
+        // this.color.map.bind(selectAtomColorMap, 'value');
+
+        // ======= data used as color values
+        const selectColorProperty = this.getModalElement<HTMLSelectElement>('atom-color-property');
+        // first option is 'element'
+        selectColorProperty.options.length = 0;
+        selectColorProperty.options.add(new Option('element', 'element'));
+        for (const key in properties['atom']) {
+            selectColorProperty.options.add(new Option(key, key));
+        }
+        this.color.property.bind(selectColorProperty, 'value');
+        this.color.mode.bind(this.getModalElement('atom-color-transform'), 'value');
+        this.color.min.bind(this.getModalElement('atom-color-min'), 'value');
+        this.color.max.bind(this.getModalElement('atom-color-max'), 'value');
+
+        // ======= color palette
+        const selectPalette = this.getModalElement<HTMLSelectElement>('atom-color-palette');
+        selectPalette.options.length = 0;
+        for (const key of ['Rwb', 'Roygb', 'Sinebow']) {
+            selectPalette.options.add(new Option(key, key));
+        }
+        this.palette.bind(selectPalette, 'value');
 
         this.axes.bind(this.getModalElement('axes'), 'value');
         this.keepOrientation.bind(this.getModalElement('keep-orientation'), 'checked');
