@@ -178,6 +178,8 @@ export class MoleculeViewer {
     private _environments?: (Environment | undefined)[];
     // List of properties for the current structure
     private _properties?: Record<string, number | undefined>[] | undefined;
+    // List of properties for the current structure
+    private _origin_properties?: Record<string, number | undefined>[] | undefined;
     // All known properties
     private _data: MapData;
     // environment indexer
@@ -352,33 +354,54 @@ export class MoleculeViewer {
      * @param structure structure to load
      * @param options options for the new structure
      */
+    // store_prop doesn't work and the code is not taking the original properties.
+    public store_prop(
+        properties?: Record<string, number | undefined>[]
+    ): void {
+        if ( this._origin_properties === undefined ) {
+            this._origin_properties = properties;
+        }
+
+    }
     public load(
         structure: Structure,
-        properties?: Record<string, number | undefined>[],
         options: Partial<LoadOptions> = {}
     ): void {
         // if the canvas size changed since last structure, make sure we update
         // everything
         this.resize();
 
-        alert(JSON.stringify(this._options.color.min.value));
+        // alert(JSON.stringify(properties));
+        const properties = this._origin_properties;
+        alert(JSON.stringify(properties));
+
+        if (properties !== undefined) {
+            // alert(JSON.stringify(properties[0][property]));
+            // alert(JSON.stringify(properties[0]["PCA atoms[3]"]));
+            for (let i = 0; i < properties.length; i++) {
+                const value: number | undefined = properties[i][String(this._options.color.property.value)];
+                if (typeof value === "number") {
+                    if (String(this._options.color.mode.value) === 'log') {
+                        properties[i][String(this._options.color.property.value)] = Math.log10(value);
+                    } else if (String(this._options.color.mode.value) === 'sqrt') {
+                        properties[i][String(this._options.color.property.value)] = Math.sqrt(value);
+                    } else if (String(this._options.color.mode.value) === 'inverse') {
+                        properties[i][String(this._options.color.property.value)] = 1 / value;
+                    }
+                }
+            }
+        }
+
+        // alert(JSON.stringify(properties));
+
+        this._properties = properties;
 
         let previousDefaultCutoff = undefined;
         if (this._highlighted !== undefined) {
             previousDefaultCutoff = this._defaultCutoff(this._highlighted.center);
         }
-
         // Deal with loading options
         this._environments = options.environments;
-        this._properties = properties;
-
-        let keepOrientation: boolean;
-        if (options.keepOrientation === undefined) {
-            // keep pre-existing settings if any
-            keepOrientation = this._options.keepOrientation.value;
-        } else {
-            keepOrientation = options.keepOrientation;
-        }
 
         let a, b, c;
         if (options.supercell === undefined) {
@@ -481,6 +504,52 @@ export class MoleculeViewer {
             selectShape.size = Math.min(Object.keys(structure['shapes']).length, 3);
 
             this._options.shape.bind(selectShape, 'options');
+        }
+
+        // Enable/Disable the color buttons
+        if (this._options.color.property.value !== 'element') {
+            this._options.color.mode.enable();
+            this._options.color.min.enable();
+            this._options.color.max.enable();
+            this._colorReset.disabled = false;
+            this._colorMoreOptions.disabled = false;
+            this._options.color.palette.enable();
+
+            if (this._properties !== undefined) {
+                if (
+                    this._properties.some((record) =>
+                        Object.values(record).some((v) => v === undefined)
+                    )
+                ) {
+                    sendWarning(
+                        'The selected structure has undefined properties for some atoms, these atoms will still be colored by element.'
+                    );
+                }
+            }
+        } else {
+            this._options.color.mode.disable();
+            this._options.color.min.disable();
+            this._options.color.max.disable();
+            this._colorReset.disabled = true;
+            this._colorMoreOptions.disabled = true;
+            this._options.color.palette.disable();
+            this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
+        }
+
+        // Set proper min & max values
+        const [min, max] = $3Dmol.getPropertyRange(
+            this._current?.model.selectedAtoms({}),
+            this._options.color.property.value
+        ) as [number, number];
+        this._options.color.min.value = min;
+        this._options.color.max.value = max;
+
+        let keepOrientation: boolean;
+        if (options.keepOrientation === undefined) {
+            // keep pre-existing settings if any
+            keepOrientation = this._options.keepOrientation.value;
+        } else {
+            keepOrientation = options.keepOrientation;
         }
 
         this._updateStyle();
@@ -979,17 +1048,6 @@ export class MoleculeViewer {
         // };
 
         this._options.color.mode.onchange.push(() => {
-            const [min, max] = $3Dmol.getPropertyRange(
-                this._current?.model.selectedAtoms({}),
-                this._options.color.property.value
-            ) as [number, number];
-            // to avoid sending a spurious warning in `colorRangeChange` below
-            // in case the new min is bigger than the old max.
-            // const { min, max } = arrayMaxMin(values);
-            this._options.color.min.value = Number.NEGATIVE_INFINITY;
-            this._options.color.max.value = max;
-            this._options.color.min.value = min;
-            this._setScaleStep([min, max], 'color');
             
             // We have to set min to infinity first, then max, and then min here
             // this._relayout({
@@ -1004,7 +1062,22 @@ export class MoleculeViewer {
             //     },
             //     [0]
             // );
+            this.load(this._current!.structure, { environments: this._environments });
+
+            const [min, max] = $3Dmol.getPropertyRange(
+                this._current?.model.selectedAtoms({}),
+                this._options.color.property.value
+            ) as [number, number];
+            // to avoid sending a spurious warning in `colorRangeChange` below
+            // in case the new min is bigger than the old max.
+            // const { min, max } = arrayMaxMin(values);
+            this._options.color.min.value = Number.NEGATIVE_INFINITY;
+            this._options.color.max.value = max;
+            this._options.color.min.value = min;
+            this._setScaleStep([min, max], 'color');
+
             restyleAndRender();
+
         });
 
         this._options.color.min.onchange.push(() => {
@@ -1110,33 +1183,33 @@ export class MoleculeViewer {
         };
 
         // Need to apply the max & min values when 3Dmol is loaded => implementation of a Promise
-        const waitForSelectedAtoms = () => {
-            return new Promise<void>((resolve) => {
-                // Check if this._current and this._current.model.selectedAtoms() exist
-                if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
-                    // If they exist, resolve the Promise
-                    resolve();
-                } else {
-                    // If they don't exist, set up a periodic check
-                    const checkInterval = setInterval(() => {
-                        if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
-                            // If they exist, resolve the Promise and clear the interval
-                            resolve();
-                            clearInterval(checkInterval);
-                        }
-                    }, 100); // Check every 100 milliseconds (adjust as needed)
-                }
-            });
-        };
-        waitForSelectedAtoms()
-            .then(() => {
-                // Your code to run when this._current?.model.selectedAtoms({}) exists
-                ColorPropertyChanges();
-                ResetColor();
-            })
-            .catch(() => {
-                // Handle errors if needed
-            });
+        // const waitForSelectedAtoms = () => {
+        //     return new Promise<void>((resolve) => {
+        //         // Check if this._current and this._current.model.selectedAtoms() exist
+        //         if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
+        //             // If they exist, resolve the Promise
+        //             resolve();
+        //         } else {
+        //             // If they don't exist, set up a periodic check
+        //             const checkInterval = setInterval(() => {
+        //                 if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
+        //                     // If they exist, resolve the Promise and clear the interval
+        //                     resolve();
+        //                     clearInterval(checkInterval);
+        //                 }
+        //             }, 100); // Check every 100 milliseconds (adjust as needed)
+        //         }
+        //     });
+        // };
+        // waitForSelectedAtoms()
+        //     .then(() => {
+        //         // Your code to run when this._current?.model.selectedAtoms({}) exists
+        //         ColorPropertyChanges();
+        //         ResetColor();
+        //     })
+        //     .catch(() => {
+        //         // Handle errors if needed
+        //     });
     }
 
     /**
@@ -1307,7 +1380,7 @@ export class MoleculeViewer {
             };
         }
 
-        sendWarning(JSON.stringify(colorScheme));
+        // sendWarning(JSON.stringify(colorScheme));
 
         return style;
     }

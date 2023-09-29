@@ -535,11 +535,13 @@ export class ViewersGrid {
                     options.highlight = indexes.atom;
                 }
             }
+            viewer.store_prop(
+                this._getSelectedAtomProperties(indexes)
+            );
             viewer.load(
                 this._structure(indexes.structure),
-                this._getSelectedAtomProperties(indexes),
                 options
-            ); // add properties: Record<string, number>[];
+            );
             data.current = indexes;
         }
 

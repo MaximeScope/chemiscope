@@ -124,12 +124,6 @@ export class StructureOptions extends OptionsGroup {
         this.color.mode.validate = optionValidator(['linear', 'log', 'sqrt', 'inverse'], 'mode');
         this.color.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
 
-        if (propertiesName.length > 2) {
-            this.color.property.value = propertiesName[2];
-        } else {
-            this.color.property.value = 'element';
-        }
-
         this.environments.bgColor.validate = optionValidator(
             ['grey', 'CPK'],
             'background atoms coloring'
@@ -203,32 +197,6 @@ export class StructureOptions extends OptionsGroup {
     /** Does the current plot use color values? */
     public hasColors(): boolean {
         return this.color.property.value !== '';
-    }
-
-    /** Get the plotly hovertemplate depending on `this._current.color` */
-    public hovertemplate(): string {
-        if (this.hasColors()) {
-            let property = this.color.property.value;
-            switch (this.color.mode.value) {
-                case 'inverse':
-                    property = `(${property})<sup>-1</sup>`;
-                    break;
-                case 'log':
-                    property = `log(${property})`;
-                    break;
-                case 'sqrt':
-                    property = `sqrt(${property})`;
-                    break;
-                case 'linear':
-                    break;
-                default:
-                    break;
-            }
-
-            return property + ': %{marker.color:.2f}<extra></extra>';
-        } else {
-            return '%{x:.2f}, %{y:.2f}<extra></extra>';
-        }
     }
 
     /**
