@@ -60,6 +60,7 @@
                </div>
 
                <button
+                  id="atom-color-more-options"
                   class="btn btn-sm btn-secondary chsp-extra-options-btn"
                   type="button"
                   data-bs-toggle="collapse"

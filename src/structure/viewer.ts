@@ -21,8 +21,7 @@ import {
     SphereData,
 } from './shapes';
 
-import { MapData, NumericProperty } from '../map/data';
-import { MapOptions } from '../map/options';
+import { MapData } from '../map/data';
 import { EnvironmentIndexer } from '../indexer';
 import { StructureOptions } from './options';
 
@@ -183,8 +182,10 @@ export class MoleculeViewer {
     private _data: MapData;
     // environment indexer
     private _indexer: EnvironmentIndexer;
-    /// Button used to reset the range of color axis
+    // Button used to reset the range of color axis
     private _colorReset: HTMLButtonElement;
+    // Button used to see more color options
+    private _colorMoreOptions: HTMLButtonElement;
     /**
      * Create a new `MoleculeViewer` inside the HTML DOM element with the given `id`.
      *
@@ -266,6 +267,7 @@ export class MoleculeViewer {
             noShapeStyle,
         ];
         this._colorReset = this._options.getModalElement<HTMLButtonElement>('atom-color-reset');
+        this._colorMoreOptions = this._options.getModalElement<HTMLButtonElement>('atom-color-more-options');
 
         this._connectOptions();
         this._trajectoryOptions = this._options.getModalElement('trajectory-settings-group');
@@ -851,6 +853,7 @@ export class MoleculeViewer {
                 this._options.color.max.enable();
 
                 this._colorReset.disabled = false;
+                this._colorMoreOptions.disabled = false;
                 this._options.palette.enable();
 
                 if (this._properties !== undefined) {
@@ -865,21 +868,6 @@ export class MoleculeViewer {
                     }
                 }
 
-                // const values = this._colors(0)[0] as number[];
-                // Color mode warning needs to be called before setting min and max to avoid isFinite error
-                // if (canChangeColors(values, 'property')) {
-                    // const { min, max } = arrayMaxMin(values);
-                const [min, max] = $3Dmol.getPropertyRange(
-                    this._current?.model.selectedAtoms({}),
-                    this._options.color.property.value
-                ) as [number, number];
-                // We have to set max first and min second here to avoid sending
-                // a spurious warning in `colorRangeChange` below in case the
-                // new min is bigger than the old max.
-                this._options.color.min.value = Number.NEGATIVE_INFINITY;
-                this._options.color.max.value = max;
-                this._options.color.min.value = min;
-                this._setScaleStep([min, max], 'color');
                 // this._relayout({
                 //     'coloraxis.colorbar.title.text': this._colorTitle(),
                 //     'coloraxis.showscale': true,
@@ -891,10 +879,11 @@ export class MoleculeViewer {
                 this._options.color.max.disable();
 
                 this._colorReset.disabled = true;
+                this._colorMoreOptions.disabled = true;
                 this._options.palette.disable();
 
-                this._options.color.min.value = 0;
-                this._options.color.max.value = 0;
+                // this._options.color.min.value = 0;
+                // this._options.color.max.value = 0;
 
                 // this._relayout({
                 //     'coloraxis.colorbar.title.text': undefined,
@@ -903,6 +892,21 @@ export class MoleculeViewer {
 
                 this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
             }
+            // const values = this._colors(0)[0] as number[];
+            // Color mode warning needs to be called before setting min and max to avoid isFinite error
+            // if (canChangeColors(values, 'property')) {
+                // const { min, max } = arrayMaxMin(values);
+            const [min, max] = $3Dmol.getPropertyRange(
+                this._current?.model.selectedAtoms({}),
+                this._options.color.property.value
+            ) as [number, number];
+            // We have to set max first and min second here to avoid sending
+            // a spurious warning in `colorRangeChange` below in case the
+            // new min is bigger than the old max.
+            this._options.color.min.value = Number.NEGATIVE_INFINITY;
+            this._options.color.max.value = max;
+            this._options.color.min.value = min;
+            this._setScaleStep([min, max], 'color');
             restyleAndRender();
         };
         this._options.color.property.onchange.push(ColorPropertyChanges);
@@ -934,43 +938,43 @@ export class MoleculeViewer {
             // } as unknown as Layout);
         };
 
-        const canChangeColors = (values: number[], changed: string): boolean => {
-            const mode = this._options.color.mode.value;
+        // const canChangeColors = (values: number[], changed: string): boolean => {
+        //     const mode = this._options.color.mode.value;
 
-            let invalidValues = '';
-            if (mode === 'log' || mode === 'sqrt') {
-                invalidValues = '<= 0';
-            } else if (mode === 'inverse') {
-                invalidValues = '== 0';
-            }
+        //     let invalidValues = '';
+        //     if (mode === 'log' || mode === 'sqrt') {
+        //         invalidValues = '<= 0';
+        //     } else if (mode === 'inverse') {
+        //         invalidValues = '== 0';
+        //     }
 
-            const allValuesNaN = values.every((value) => isNaN(value));
-            const someValuesNaN = values.some((value) => isNaN(value));
+        //     const allValuesNaN = values.every((value) => isNaN(value));
+        //     const someValuesNaN = values.some((value) => isNaN(value));
 
-            if (allValuesNaN) {
-                sendWarning(
-                    `The selected property contains only values ${invalidValues}. ` +
-                        'To display this property, select an appropriate color scale. ' +
-                        `The ${changed} will be set to its last value.`
-                );
+        //     if (allValuesNaN) {
+        //         sendWarning(
+        //             `The selected property contains only values ${invalidValues}. ` +
+        //                 'To display this property, select an appropriate color scale. ' +
+        //                 `The ${changed} will be set to its last value.`
+        //         );
 
-                if (changed === 'property') {
-                    this._options.color.property.reset();
-                } else {
-                    this._options.color.mode.reset();
-                }
+        //         if (changed === 'property') {
+        //             this._options.color.property.reset();
+        //         } else {
+        //             this._options.color.mode.reset();
+        //         }
 
-                return false;
-            } else if (someValuesNaN) {
-                sendWarning(
-                    `The selected property contains some values ${invalidValues}. ` +
-                        'These values will be colored in grey.'
-                );
-                return true;
-            } else {
-                return true;
-            }
-        };
+        //         return false;
+        //     } else if (someValuesNaN) {
+        //         sendWarning(
+        //             `The selected property contains some values ${invalidValues}. ` +
+        //                 'These values will be colored in grey.'
+        //         );
+        //         return true;
+        //     } else {
+        //         return true;
+        //     }
+        // };
 
         this._options.color.mode.onchange.push(() => {
             const [min, max] = $3Dmol.getPropertyRange(
@@ -1102,8 +1106,35 @@ export class MoleculeViewer {
 
             this._viewer.render();
         };
-        // ResetColor();
-        // ColorPropertyChanges();
+
+        // Need to apply the max & min values when 3Dmol is loaded => implementation of a Promise
+        const waitForSelectedAtoms = () => {
+            return new Promise<void>((resolve) => {
+                // Check if this._current and this._current.model.selectedAtoms() exist
+                if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
+                    // If they exist, resolve the Promise
+                    resolve();
+                } else {
+                    // If they don't exist, set up a periodic check
+                    const checkInterval = setInterval(() => {
+                        if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
+                            // If they exist, resolve the Promise and clear the interval
+                            resolve();
+                            clearInterval(checkInterval);
+                        }
+                    }, 100); // Check every 100 milliseconds (adjust as needed)
+                }
+            });
+        };
+        waitForSelectedAtoms()
+            .then(() => {
+                // Your code to run when this._current?.model.selectedAtoms({}) exists
+                ColorPropertyChanges();
+                ResetColor();
+            })
+            .catch(() => {
+                // Handle errors if needed
+            });
     }
 
     /**
@@ -1273,6 +1304,8 @@ export class MoleculeViewer {
                 colorscheme: colorScheme,
             };
         }
+
+        // sendWarning(JSON.stringify(colorScheme));
 
         return style;
     }
@@ -1540,13 +1573,13 @@ export class MoleculeViewer {
         };
     }
 
-    private _property(name: string): NumericProperty {
-        const result = this._data[this._indexer.mode][name];
-        if (result === undefined) {
-            throw Error(`unknown property '${name}' requested in map`);
-        }
-        return result;
-    }
+    // private _property(name: string): NumericProperty {
+    //     const result = this._data[this._indexer.mode][name];
+    //     if (result === undefined) {
+    //         throw Error(`unknown property '${name}' requested in map`);
+    //     }
+    //     return result;
+    // }
 
     /**
      * Get the color values to use with the given plotly `trace`, or all of
