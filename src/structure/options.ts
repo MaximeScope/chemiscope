@@ -59,8 +59,8 @@ export class StructureOptions extends OptionsGroup {
         mode: HTMLOption<'string'>;
         min: HTMLOption<'number'>;
         max: HTMLOption<'number'>;
+        palette: HTMLOption<'string'>;
     };
-    public palette: HTMLOption<'string'>;
 
     /// The Modal instance
     private _modal: Modal;
@@ -110,20 +110,19 @@ export class StructureOptions extends OptionsGroup {
 
         const propertiesName = Object.keys(properties['atom']);
         // assert(propertiesName.length >= 2);
-
-        this.palette = new HTMLOption('string', 'Rwb');
-        this.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
         
         this.color = {
             property: new HTMLOption('string', 'element'),
             min: new HTMLOption('number', 0),
             max: new HTMLOption('number', 0),
             mode: new HTMLOption('string', 'linear'),
+            palette: new HTMLOption('string', 'Rwb'),
         };
 
         // validate atom properties for coloring
         this.color.property.validate = optionValidator(propertiesName.concat(['element']), 'color');
         this.color.mode.validate = optionValidator(['linear', 'log', 'sqrt', 'inverse'], 'mode');
+        this.color.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
 
         if (propertiesName.length > 2) {
             this.color.property.value = propertiesName[2];
@@ -381,7 +380,7 @@ export class StructureOptions extends OptionsGroup {
         for (const key of ['Rwb', 'Roygb', 'Sinebow']) {
             selectPalette.options.add(new Option(key, key));
         }
-        this.palette.bind(selectPalette, 'value');
+        this.color.palette.bind(selectPalette, 'value');
 
         this.axes.bind(this.getModalElement('axes'), 'value');
         this.keepOrientation.bind(this.getModalElement('keep-orientation'), 'checked');

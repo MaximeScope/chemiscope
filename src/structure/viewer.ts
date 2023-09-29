@@ -47,7 +47,7 @@ function defaultOpacity(): number {
 function setup3DmolStructure(
     model: $3Dmol.GLModel,
     structure: Structure,
-    properties?: Record<string, number | undefined>[] | undefined
+    properties?: Record<string, number | undefined>[]
 ): void {
     if (structure.cell !== undefined) {
         const cell = structure.cell;
@@ -354,12 +354,14 @@ export class MoleculeViewer {
      */
     public load(
         structure: Structure,
-        properties: Record<string, number | undefined>[] | undefined,
+        properties?: Record<string, number | undefined>[],
         options: Partial<LoadOptions> = {}
     ): void {
         // if the canvas size changed since last structure, make sure we update
         // everything
         this.resize();
+
+        alert(JSON.stringify(this._options.color.min.value));
 
         let previousDefaultCutoff = undefined;
         if (this._highlighted !== undefined) {
@@ -854,7 +856,7 @@ export class MoleculeViewer {
 
                 this._colorReset.disabled = false;
                 this._colorMoreOptions.disabled = false;
-                this._options.palette.enable();
+                this._options.color.palette.enable();
 
                 if (this._properties !== undefined) {
                     if (
@@ -880,7 +882,7 @@ export class MoleculeViewer {
 
                 this._colorReset.disabled = true;
                 this._colorMoreOptions.disabled = true;
-                this._options.palette.disable();
+                this._options.color.palette.disable();
 
                 // this._options.color.min.value = 0;
                 // this._options.color.max.value = 0;
@@ -1034,7 +1036,7 @@ export class MoleculeViewer {
         this._colorReset.addEventListener('click', ResetColor);
 
         // ======= color palette
-        this._options.palette.onchange.push(() => {
+        this._options.color.palette.onchange.push(() => {
             // this._relayout({
             //     'coloraxis.colorscale': this._options.colorScale(),
             // } as unknown as Layout);
@@ -1276,12 +1278,12 @@ export class MoleculeViewer {
         const [min, max]: [number, number] = [this._options.color.min.value, this._options.color.max.value];
         let grad: $3Dmol.Gradient = new $3Dmol.Gradient.RWB(max, min);
 
-        if (this._options.palette.value === 'Rwb') {
+        if (this._options.color.palette.value === 'Rwb') {
             // min and max are swapped to ensure red is used for high values, blue for low values
             grad = new $3Dmol.Gradient.RWB(max, min);
-        } else if (this._options.palette.value === 'Roygb') {
+        } else if (this._options.color.palette.value === 'Roygb') {
             grad = new $3Dmol.Gradient.ROYGB(max, min);
-        } else if (this._options.palette.value === 'Sinebow') {
+        } else if (this._options.color.palette.value === 'Sinebow') {
             grad = new $3Dmol.Gradient.Sinebow(max, min);
         }
 
@@ -1305,7 +1307,7 @@ export class MoleculeViewer {
             };
         }
 
-        // sendWarning(JSON.stringify(colorScheme));
+        sendWarning(JSON.stringify(colorScheme));
 
         return style;
     }
