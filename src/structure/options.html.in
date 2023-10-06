@@ -33,23 +33,6 @@
                   <label class="form-check-label" for="rotation" title="rotate the camera continuously">rotation</label>
                </div>
             </div>
-            <!--
-            <div class="chsp-atom-color-property">
-               <div class="input-group input-group-sm">
-                  <label class="input-group-text" for="atom-color-property">Color atoms by:</label>
-                  <select id="atom-color-property" class="form-select">
-                     <option value="element">element</option>
-                  </select>
-               </div>
-               <div class="input-group input-group-sm">
-                  <label class="input-group-text" for="atom-color-map">Color map:</label>
-                  <select id="atom-color-map" class="form-select" disabled>
-                     <option value="rwb">RWB (lowest values: blue, highest values: red)</option>
-                     <option value="sinebow">Rainbow (lowest values: purple, highest values: red)</option>
-                  </select>
-               </div>
-            </div>
-            -->
             <div class="chsp-atom-color-property">
 
                <div class="input-group input-group-sm">

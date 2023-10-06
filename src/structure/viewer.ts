@@ -363,8 +363,6 @@ export class MoleculeViewer {
         // everything
         this.resize();
 
-        // alert(JSON.stringify(properties));
-
         this._properties = properties;
 
         if (properties !== undefined) {
@@ -886,33 +884,12 @@ export class MoleculeViewer {
             restyleAndRender();
         });
 
-        // this._options.color.property.onchange.push(() => {
-        //     if (this._options.color.property.value !== 'element') {
-        //         this._options.color.mode.enable();
-        //         if (this._properties !== undefined) {
-        //             if (
-        //                 this._properties.some((record) =>
-        //                     Object.values(record).some((v) => v === undefined)
-        //                 )
-        //             ) {
-        //                 sendWarning(
-        //                     'The selected structure has undefined properties for some atoms, these atoms will still be colored by element.'
-        //                 );
-        //             }
-        //         }
-        //     } else {
-        //         this._options.color.mode.disable();
-        //         this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
-        //     }
-        //     restyleAndRender();
-        // });
-        // this._options.color.mode.onchange.push(restyleAndRender);
-
-        // ======= color axis settings
+        // ======= color settings
         // setup state when the property changes
         const ColorPropertyChanges = () => {
             if (this._options.color.property.value !== 'element') {
                 this._options.color.mode.enable();
+                this._options.color.mode.value = 'linear';
                 this._options.color.min.enable();
                 this._options.color.max.enable();
 
@@ -931,12 +908,6 @@ export class MoleculeViewer {
                         );
                     }
                 }
-
-                // this._relayout({
-                //     'coloraxis.colorbar.title.text': this._colorTitle(),
-                //     'coloraxis.showscale': true,
-                // } as unknown as Layout);
-                // }
             } else {
                 this._options.color.mode.disable();
                 this._options.color.min.disable();
@@ -946,20 +917,8 @@ export class MoleculeViewer {
                 this._colorMoreOptions.disabled = true;
                 this._options.color.palette.disable();
 
-                // this._options.color.min.value = 0;
-                // this._options.color.max.value = 0;
-
-                // this._relayout({
-                //     'coloraxis.colorbar.title.text': undefined,
-                //     'coloraxis.showscale': false,
-                // } as unknown as Layout);
-
                 this._viewer.setColorByElement({}, $3Dmol.elementColors.Jmol);
             }
-            // const values = this._colors(0)[0] as number[];
-            // Color mode warning needs to be called before setting min and max to avoid isFinite error
-            // if (canChangeColors(values, 'property')) {
-                // const { min, max } = arrayMaxMin(values);
             const [min, max] = $3Dmol.getPropertyRange(
                 this._current?.model.selectedAtoms({}),
                 this._options.color.property.value
@@ -989,100 +948,38 @@ export class MoleculeViewer {
                 }
                 return;
             }
-
-            // this._relayout({
-            //     'coloraxis.cmax': max,
-            //     'coloraxis.cmin': min,
-            //     // looks like changing only 'coloraxis.cmax'/'coloraxis.cmin' do
-            //     // not update the color of the points (although it does change
-            //     // the colorbar). Asking for an update of 'coloraxis.colorscale'
-            //     // seems to do the trick. This is possibly a Plotly bug, we
-            //     // would need to investigate a bit more.
-            //     'coloraxis.colorscale': this._options.colorScale(),
-            // } as unknown as Layout);
         };
 
-        // const canChangeColors = (values: number[], changed: string): boolean => {
-        //     const mode = this._options.color.mode.value;
-
-        //     let invalidValues = '';
-        //     if (mode === 'log' || mode === 'sqrt') {
-        //         invalidValues = '<= 0';
-        //     } else if (mode === 'inverse') {
-        //         invalidValues = '== 0';
-        //     }
-
-        //     const allValuesNaN = values.every((value) => isNaN(value));
-        //     const someValuesNaN = values.some((value) => isNaN(value));
-
-        //     if (allValuesNaN) {
-        //         sendWarning(
-        //             `The selected property contains only values ${invalidValues}. ` +
-        //                 'To display this property, select an appropriate color scale. ' +
-        //                 `The ${changed} will be set to its last value.`
-        //         );
-
-        //         if (changed === 'property') {
-        //             this._options.color.property.reset();
-        //         } else {
-        //             this._options.color.mode.reset();
-        //         }
-
-        //         return false;
-        //     } else if (someValuesNaN) {
-        //         sendWarning(
-        //             `The selected property contains some values ${invalidValues}. ` +
-        //                 'These values will be colored in grey.'
-        //         );
-        //         return true;
-        //     } else {
-        //         return true;
-        //     }
-        // };
-
+        // ======= color mode/transform
         this._options.color.mode.onchange.push(() => {
-            
-            // We have to set min to infinity first, then max, and then min here
-            // this._relayout({
-            //     'coloraxis.colorbar.title.text': this._colorTitle(),
-            //     'coloraxis.showscale': true,
-            // } as unknown as Layout);
 
-            // this._restyle(
-            //     {
-            //         hovertemplate: this._options.hovertemplate(),
-            //         'marker.color': this._colors(0),
-            //     },
-            //     [0]
-            // );
-
+            // JSON.parse & JSON.stringify to make a deep copy of the properties to avoid modifying the original ones
             const properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, number | undefined>[];
+            const property = this._options.color.property.value;
+            const mode = this._options.color.mode.value;
 
             if (this._properties !== undefined) {
-                // make a deep copy of the properties to avoid modifying the original
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 assert(properties !== undefined);
 
-                const mode = this._options.color.mode.value;
-                const property = this._options.color.property.value;
                 for (let i = 0; i < properties.length; i++) {
                     const value = properties[i][property];
                     if (typeof value === "number") {
                         if (mode === 'log') {
-                            if (value <= 0) { 
-                                properties[i][property] = 0; 
+                            if (value <= 0 || isNaN(value)) { 
+                                properties[i][property] = NaN;
                             } else { 
                                 properties[i][property] = Math.log10(value);
                             }
                         } else if (mode === 'sqrt') {
-                            if (value <= 0) { 
-                                properties[i][property] = 0; 
+                            if (value <= 0 || isNaN(value)) { 
+                                properties[i][property] = NaN; 
                             } else { 
                                 properties[i][property] = Math.sqrt(value);
                             }
                         } else if (mode === 'inverse') {
-                            if (value === 0) { 
-                                properties[i][property] = 0; 
+                            if (value === 0 || isNaN(value)) { 
+                                properties[i][property] = NaN; 
                             } else { 
                                 properties[i][property] = 1 / value;
                             }
@@ -1090,27 +987,19 @@ export class MoleculeViewer {
                     }
                 }
             }
-        
-            const atoms = this._current?.model.selectedAtoms({});
+
+            // to change the atom properties without using $3Dmol.download
+            const atoms = this._current?.model.selectedAtoms({}); // this._viewer.selectedAtoms({}); doesn't work
             if (atoms) {
+                alert(JSON.stringify(atoms[20]));
                 for (let i = 0, n = atoms.length; i < n; i++) {
                     atoms[i].properties = properties[i];
+                    if (isNaN(Number(properties[i]?.[property]))) { // using atoms[i].color doesn't work properly
+                        // this._current?.model.setColorByFunction({properties: properties[i]}, {colorfunc: () => {return 0x808080;}});
+                        atoms[i].color = 0x808080;
+                    }
                 }
             }
-
-            // $3Dmol.download("pdb:4wwy", this._viewer, {}, () => {
-            //     const atoms = this._viewer.selectedAtoms({});
-            //     if (atoms) {
-            //         for (let i = 0, n = atoms.length; i < n; i++) {
-            //             atoms[i].properties = properties[i];
-            //         }
-            //         // const colorScheme: { prop: string; gradient: $3Dmol.Gradient } = {
-            //         //     prop: properties,
-            //         //     gradient: grad,
-            //         // };
-            //         // this._current?.model.setStyle({ style: {colorscheme: colorScheme}});
-            //     }
-            // });
 
             const [min, max] = $3Dmol.getPropertyRange(
                 this._current?.model.selectedAtoms({}),
@@ -1118,7 +1007,6 @@ export class MoleculeViewer {
             ) as [number, number];
             // to avoid sending a spurious warning in `colorRangeChange` below
             // in case the new min is bigger than the old max.
-            // const { min, max } = arrayMaxMin(values);
             this._options.color.min.value = Number.NEGATIVE_INFINITY;
             this._options.color.max.value = max;
             this._options.color.min.value = min;
@@ -1128,39 +1016,32 @@ export class MoleculeViewer {
 
         });
 
+        // ======= color min
         this._options.color.min.onchange.push(() => {
             colorRangeChange('min');
             restyleAndRender();
         });
+
+        // ======= color max
         this._options.color.max.onchange.push(() => {
             colorRangeChange('max');
             restyleAndRender();
         });
 
+        // ======= color reset
         const ResetColor = () => {
-            // const values = this._colors(0)[0] as number[];
-            // const { min, max } = arrayMaxMin(values);
             const [min, max] = $3Dmol.getPropertyRange(
                 this._current?.model.selectedAtoms({}),
                 this._options.color.property.value
             ) as [number, number];
             this._options.color.min.value = min;
             this._options.color.max.value = max;
-            // this._relayout({
-            //     'coloraxis.cmax': max,
-            //     'coloraxis.cmin': min,
-            //     // same as above regarding update of the points color
-            //     'coloraxis.colorscale': this._options.colorScale(),
-            // } as unknown as Layout);
             restyleAndRender();
         };
         this._colorReset.addEventListener('click', ResetColor);
 
         // ======= color palette
         this._options.color.palette.onchange.push(() => {
-            // this._relayout({
-            //     'coloraxis.colorscale': this._options.colorScale(),
-            // } as unknown as Layout);
             restyleAndRender();
         });
 
@@ -1229,35 +1110,6 @@ export class MoleculeViewer {
 
             this._viewer.render();
         };
-
-        // Need to apply the max & min values when 3Dmol is loaded => implementation of a Promise
-        // const waitForSelectedAtoms = () => {
-        //     return new Promise<void>((resolve) => {
-        //         // Check if this._current and this._current.model.selectedAtoms() exist
-        //         if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
-        //             // If they exist, resolve the Promise
-        //             resolve();
-        //         } else {
-        //             // If they don't exist, set up a periodic check
-        //             const checkInterval = setInterval(() => {
-        //                 if (this._current?.model && typeof this._current?.model.selectedAtoms === 'function') {
-        //                     // If they exist, resolve the Promise and clear the interval
-        //                     resolve();
-        //                     clearInterval(checkInterval);
-        //                 }
-        //             }, 100); // Check every 100 milliseconds (adjust as needed)
-        //         }
-        //     });
-        // };
-        // waitForSelectedAtoms()
-        //     .then(() => {
-        //         // Your code to run when this._current?.model.selectedAtoms({}) exists
-        //         ColorPropertyChanges();
-        //         ResetColor();
-        //     })
-        //     .catch(() => {
-        //         // Handle errors if needed
-        //     });
     }
 
     /**
@@ -1392,10 +1244,7 @@ export class MoleculeViewer {
      * highlighting a specific environment
      */
     private _mainStyle(): Partial<$3Dmol.AtomStyleSpec> {
-        // const [min, max] = $3Dmol.getPropertyRange(
-        //     this._current?.model.selectedAtoms({}),
-        //     this._options.color.property.value
-        // ) as [number, number];
+
         const [min, max]: [number, number] = [this._options.color.min.value, this._options.color.max.value];
         let grad: $3Dmol.Gradient = new $3Dmol.Gradient.RWB(max, min);
 
@@ -1427,8 +1276,6 @@ export class MoleculeViewer {
                 colorscheme: colorScheme,
             };
         }
-
-        // sendWarning(JSON.stringify(colorScheme));
 
         return style;
     }
@@ -1695,36 +1542,6 @@ export class MoleculeViewer {
             }),
         };
     }
-
-    // private _property(name: string): NumericProperty {
-    //     const result = this._data[this._indexer.mode][name];
-    //     if (result === undefined) {
-    //         throw Error(`unknown property '${name}' requested in map`);
-    //     }
-    //     return result;
-    // }
-
-    /**
-     * Get the color values to use with the given plotly `trace`, or all of
-     * them if `trace === undefined`
-     */
-    // private _colors(trace?: number): Array<Array<string | number>> {
-    //     let colors;
-    //     if (this._options.hasColors()) {
-    //         colors = this._property(this._options.color.property.value).values;
-    //     } else {
-    //         colors = new Array(this._property(this._options.x.property.value).values.length).fill(
-    //             0.5
-    //         ) as number[];
-    //     }
-    //     const values = this._options.calculateColors(colors);
-    //     const selected = [];
-    //     for (const data of this._selected.values()) {
-    //         selected.push(data.color);
-    //     }
-
-    //     return this._selectTrace<Array<string | number>>(values, selected, trace);
-    // }
 
     /** Changes the step of the arrow buttons in min/max input based on dataset range*/
     private _setScaleStep(axisBounds: number[], name: 'x' | 'y' | 'z' | 'color'): void {

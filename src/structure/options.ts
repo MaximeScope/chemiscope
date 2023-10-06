@@ -317,18 +317,6 @@ export class StructureOptions extends OptionsGroup {
         this.supercell[1].bind(this.getModalElement('supercell-b'), 'value');
         this.supercell[2].bind(this.getModalElement('supercell-c'), 'value');
 
-        // const selectAtomColorProperty =
-        //     this.getModalElement<HTMLSelectElement>('atom-color-property');
-        // // selectAtomColorProperty.options.length = 0;
-        // // selectAtomColorProperty.options.add(new Option('element', ''));
-        // for (const key in properties['atom']) {
-        //     selectAtomColorProperty.options.add(new Option(key, key));
-        // }
-        // this.color.property.bind(selectAtomColorProperty, 'value');
-
-        // const selectAtomColorMap = this.getModalElement<HTMLSelectElement>('atom-color-map');
-        // this.color.map.bind(selectAtomColorMap, 'value');
-
         // ======= data used as color values
         const selectColorProperty = this.getModalElement<HTMLSelectElement>('atom-color-property');
         // first option is 'element'
