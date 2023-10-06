@@ -991,7 +991,7 @@ export class MoleculeViewer {
             // to change the atom properties without using $3Dmol.download
             const atoms = this._current?.model.selectedAtoms({}); // this._viewer.selectedAtoms({}); doesn't work
             if (atoms) {
-                alert(JSON.stringify(atoms[20]));
+                // alert(JSON.stringify(atoms[20]));
                 for (let i = 0, n = atoms.length; i < n; i++) {
                     atoms[i].properties = properties[i];
                     if (isNaN(Number(properties[i]?.[property]))) { // using atoms[i].color doesn't work properly
