@@ -354,17 +354,9 @@ export class MoleculeViewer {
      * @param structure structure to load
      * @param options options for the new structure
      */
-    // store_prop doesn't work and the code is not taking the original properties.
-    public store_prop(
-        properties?: Record<string, number | undefined>[]
-    ): void {
-        if ( this._origin_properties === undefined ) {
-            this._origin_properties = properties;
-        }
-
-    }
     public load(
         structure: Structure,
+        properties?: Record<string, number | undefined>[],
         options: Partial<LoadOptions> = {}
     ): void {
         // if the canvas size changed since last structure, make sure we update
@@ -372,29 +364,30 @@ export class MoleculeViewer {
         this.resize();
 
         // alert(JSON.stringify(properties));
-        const properties = this._origin_properties;
-        alert(JSON.stringify(properties));
+
+        this._properties = properties;
 
         if (properties !== undefined) {
-            // alert(JSON.stringify(properties[0][property]));
-            // alert(JSON.stringify(properties[0]["PCA atoms[3]"]));
+            // make a deep copy of the properties to avoid modifying the original
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            properties = JSON.parse(JSON.stringify(properties));
+            assert(properties !== undefined);
+
+            const mode = this._options.color.mode.value;
+            const property = this._options.color.property.value;
             for (let i = 0; i < properties.length; i++) {
-                const value: number | undefined = properties[i][String(this._options.color.property.value)];
+                const value = properties[i][property];
                 if (typeof value === "number") {
-                    if (String(this._options.color.mode.value) === 'log') {
-                        properties[i][String(this._options.color.property.value)] = Math.log10(value);
-                    } else if (String(this._options.color.mode.value) === 'sqrt') {
-                        properties[i][String(this._options.color.property.value)] = Math.sqrt(value);
-                    } else if (String(this._options.color.mode.value) === 'inverse') {
-                        properties[i][String(this._options.color.property.value)] = 1 / value;
+                    if (mode === 'log') {
+                        properties[i][property] = Math.log10(value);
+                    } else if (mode === 'sqrt') {
+                        properties[i][property] = Math.sqrt(value);
+                    } else if (mode === 'inverse') {
+                        properties[i][property] = 1 / value;
                     }
                 }
             }
         }
-
-        // alert(JSON.stringify(properties));
-
-        this._properties = properties;
 
         let previousDefaultCutoff = undefined;
         if (this._highlighted !== undefined) {
@@ -1062,7 +1055,62 @@ export class MoleculeViewer {
             //     },
             //     [0]
             // );
-            this.load(this._current!.structure, { environments: this._environments });
+
+            const properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, number | undefined>[];
+
+            if (this._properties !== undefined) {
+                // make a deep copy of the properties to avoid modifying the original
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                assert(properties !== undefined);
+
+                const mode = this._options.color.mode.value;
+                const property = this._options.color.property.value;
+                for (let i = 0; i < properties.length; i++) {
+                    const value = properties[i][property];
+                    if (typeof value === "number") {
+                        if (mode === 'log') {
+                            if (value <= 0) { 
+                                properties[i][property] = 0; 
+                            } else { 
+                                properties[i][property] = Math.log10(value);
+                            }
+                        } else if (mode === 'sqrt') {
+                            if (value <= 0) { 
+                                properties[i][property] = 0; 
+                            } else { 
+                                properties[i][property] = Math.sqrt(value);
+                            }
+                        } else if (mode === 'inverse') {
+                            if (value === 0) { 
+                                properties[i][property] = 0; 
+                            } else { 
+                                properties[i][property] = 1 / value;
+                            }
+                        }
+                    }
+                }
+            }
+        
+            const atoms = this._current?.model.selectedAtoms({});
+            if (atoms) {
+                for (let i = 0, n = atoms.length; i < n; i++) {
+                    atoms[i].properties = properties[i];
+                }
+            }
+
+            // $3Dmol.download("pdb:4wwy", this._viewer, {}, () => {
+            //     const atoms = this._viewer.selectedAtoms({});
+            //     if (atoms) {
+            //         for (let i = 0, n = atoms.length; i < n; i++) {
+            //             atoms[i].properties = properties[i];
+            //         }
+            //         // const colorScheme: { prop: string; gradient: $3Dmol.Gradient } = {
+            //         //     prop: properties,
+            //         //     gradient: grad,
+            //         // };
+            //         // this._current?.model.setStyle({ style: {colorscheme: colorScheme}});
+            //     }
+            // });
 
             const [min, max] = $3Dmol.getPropertyRange(
                 this._current?.model.selectedAtoms({}),

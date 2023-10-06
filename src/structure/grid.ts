@@ -492,6 +492,7 @@ export class ViewersGrid {
         const atomProperties = filter(numberProperties, (p) => p.target === 'atom');
         return atomProperties;
     }
+
     private _getSelectedAtomProperties(
         indexes?: Indexes
     ): Record<string, number | undefined>[] | undefined {
@@ -535,11 +536,9 @@ export class ViewersGrid {
                     options.highlight = indexes.atom;
                 }
             }
-            viewer.store_prop(
-                this._getSelectedAtomProperties(indexes)
-            );
             viewer.load(
                 this._structure(indexes.structure),
+                this._getSelectedAtomProperties(indexes),
                 options
             );
             data.current = indexes;
