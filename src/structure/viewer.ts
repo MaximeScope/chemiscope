@@ -991,12 +991,13 @@ export class MoleculeViewer {
             // to change the atom properties without using $3Dmol.download
             const atoms = this._current?.model.selectedAtoms({}); // this._viewer.selectedAtoms({}); doesn't work
             if (atoms) {
-                // alert(JSON.stringify(atoms[20]));
+                // can be tested with alert(JSON.stringify(atoms[20]));
                 for (let i = 0, n = atoms.length; i < n; i++) {
                     atoms[i].properties = properties[i];
+                    // atoms[i].color = "" as unknown as $3Dmol.ColorSpec;
                     if (isNaN(Number(properties[i]?.[property]))) { // using atoms[i].color doesn't work properly
                         // this._current?.model.setColorByFunction({properties: properties[i]}, {colorfunc: () => {return 0x808080;}});
-                        atoms[i].color = 0x808080;
+                        // atoms[i].color = 0x808080;
                     }
                 }
             }
@@ -1127,6 +1128,10 @@ export class MoleculeViewer {
      * Update the styles of all atoms as required
      */
     private _updateStyle(): void {
+
+        const atoms = this._current?.model.selectedAtoms({});
+        const property = this._options.color.property.value;
+
         if (this._current === undefined) {
             return;
         }
@@ -1137,7 +1142,20 @@ export class MoleculeViewer {
         // if there is no environment to highlight, render all atoms with the
         // main style
         if (!this._environmentsEnabled()) {
-            this._current.model.setStyle({}, this._mainStyle());
+            // This wouldn't work: this._highlighted.model.setStyle({properties: {[property]: null}}, this._grayStyle());
+            // In this case, the atoms are checked one by one to test their inner properties.
+            if (atoms && property !== 'element') {
+                for (let i = 0, n = atoms.length; i < n; i++) {
+                    const value = atoms[i].properties?.[property] as number;
+                    if (isNaN(Number(value))) {
+                        this._current.model.setStyle({ index: i }, this._grayStyle());
+                    } else {
+                        this._current.model.setStyle({ index: i }, this._mainStyle());
+                    }
+                }
+            } else {
+                this._current.model.setStyle({}, this._mainStyle());
+            }
             this._viewer.render();
             return;
         }
@@ -1152,8 +1170,21 @@ export class MoleculeViewer {
             /* add: */ true
         );
 
-        // and the environment around the central atom with main style
-        this._highlighted.model.setStyle({}, this._mainStyle());
+        // and the environment around the central atom with main/gray style
+        // This wouldn't work: this._highlighted.model.setStyle({properties: {[property]: null}}, this._grayStyle());
+        // In this case, the atoms are checked one by one to test their inner properties.
+        if (atoms && property !== 'element') {
+            for (let i = 0, n = atoms.length; i < n; i++) {
+                const value = atoms[i].properties?.[property] as number;
+                if (isNaN(Number(value))) {
+                    this._highlighted.model.setStyle({ index: i }, this._grayStyle());
+                } else {
+                    this._highlighted.model.setStyle({ index: i }, this._mainStyle());
+                }
+            }
+        } else {
+            this._highlighted.model.setStyle({}, this._mainStyle());
+        }
     }
 
     private _addShapes(): void {
@@ -1267,6 +1298,42 @@ export class MoleculeViewer {
         if (this._options.atoms.value) {
             style.sphere = {
                 scale: this._options.spaceFilling.value ? 1.0 : 0.22,
+                colorscheme: colorScheme,
+            };
+        }
+        if (this._options.bonds.value) {
+            style.stick = {
+                radius: 0.15,
+                colorscheme: colorScheme,
+            };
+        }
+
+        return style;
+    }
+
+    /**
+     * Get the gray style used for atoms with undefined properties
+     */
+    private _grayStyle(): Partial<$3Dmol.AtomStyleSpec> {
+
+        const [min, max] = $3Dmol.getPropertyRange(
+            this._current?.model.selectedAtoms({}),
+            this._options.color.property.value
+        ) as [number, number];
+        const property: string = this._options.color.property.value;
+        const scale = this._options.spaceFilling.value ? 1.0 : 0.22;
+        const grad: $3Dmol.Gradient = new $3Dmol.Gradient.CustomLinear(max, min, ["gray", "gray"]);
+
+        const colorScheme: { prop: string; gradient: $3Dmol.Gradient } = {
+            prop: property,
+            gradient: grad,
+        };
+
+        const style: Partial<$3Dmol.AtomStyleSpec> = {};
+
+        if (this._options.atoms.value) {
+            style.sphere = {
+                scale: scale,
                 colorscheme: colorScheme,
             };
         }
