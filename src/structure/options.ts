@@ -120,7 +120,11 @@ export class StructureOptions extends OptionsGroup {
         };
 
         // validate atom properties for coloring
-        this.color.property.validate = optionValidator(propertiesName.concat(['element']), 'color');
+        if (Object.keys(properties['atom']).includes('element')) {
+            this.color.property.validate = optionValidator(propertiesName, 'color');
+        } else {
+            this.color.property.validate = optionValidator(propertiesName.concat(['element']), 'color');
+        }
         this.color.mode.validate = optionValidator(['linear', 'log', 'sqrt', 'inverse'], 'mode');
         this.color.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
 
@@ -321,7 +325,9 @@ export class StructureOptions extends OptionsGroup {
         const selectColorProperty = this.getModalElement<HTMLSelectElement>('atom-color-property');
         // first option is 'element'
         selectColorProperty.options.length = 0;
-        selectColorProperty.options.add(new Option('element', 'element'));
+        if (!Object.keys(properties['atom']).includes('element')) {
+            selectColorProperty.options.add(new Option('element', 'element'));
+        }
         for (const key in properties['atom']) {
             selectColorProperty.options.add(new Option(key, key));
         }
