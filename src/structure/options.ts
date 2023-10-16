@@ -129,7 +129,7 @@ export class StructureOptions extends OptionsGroup {
         this.color.palette.validate = optionValidator(['Rwb', 'Roygb', 'Sinebow'], 'palette');
 
         this.environments.bgColor.validate = optionValidator(
-            ['grey', 'CPK'],
+            ['grey', 'CPK', 'prop'],
             'background atoms coloring'
         );
         this.environments.bgStyle.validate = optionValidator(

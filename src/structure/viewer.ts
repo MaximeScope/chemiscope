@@ -1285,14 +1285,14 @@ export class MoleculeViewer {
                 radius: 0.149,
                 opacity: defaultOpacity(),
                 hidden: !this._options.bonds.value,
-            };
+            } as unknown as $3Dmol.StickStyleSpec;
 
             if (bgStyle === 'ball-stick' && this._options.shape.value === '') {
                 style.sphere = {
                     // slightly smaller scale than the main style
-                    scale: 0.219,
+                    scale: this._options.spaceFilling.value ? 0.999 : 0.219,
                     opacity: defaultOpacity(),
-                };
+                } as unknown as $3Dmol.SphereStyleSpec;
             }
         } else {
             unreachable();
@@ -1308,6 +1308,25 @@ export class MoleculeViewer {
 
             if (style.sphere !== undefined) {
                 style.sphere.color = 0x808080;
+            }
+        } else if (bgColor === 'prop') {
+            if (style.stick !== undefined) {
+                style.stick = {
+                    // slightly smaller radius than the main style
+                    radius: 0.149,
+                    opacity: defaultOpacity(),
+                    hidden: !this._options.bonds.value,
+                    colorfunc: this.color_function()
+                } as unknown as $3Dmol.StickStyleSpec;
+            }
+
+            if (style.sphere !== undefined) {
+                style.sphere = {
+                    // slightly smaller scale than the main style
+                    scale: this._options.spaceFilling.value ? 0.999 : 0.219,
+                    opacity: defaultOpacity(),
+                    colorfunc: this.color_function()
+                } as unknown as $3Dmol.SphereStyleSpec;
             }
         } else {
             unreachable();
