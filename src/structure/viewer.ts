@@ -177,7 +177,7 @@ export class MoleculeViewer {
     /// List of atom-centered environments for the current structure
     private _environments?: (Environment | undefined)[];
     // List of properties for the current structure
-    private _properties?: Record<string, number | undefined>[] | undefined;
+    private _properties?: Record<string, (number | undefined)[]> | undefined;
     // All known properties
     private _data: MapData;
     // environment indexer
@@ -354,36 +354,30 @@ export class MoleculeViewer {
      */
     public load(
         structure: Structure,
-        properties?: Record<string, number | undefined>[],
+        properties?: Record<string, number | undefined>[] | undefined,
         options: Partial<LoadOptions> = {}
     ): void {
         // if the canvas size changed since last structure, make sure we update
         // everything
         this.resize();
 
-        this._properties = properties;
-
-        if (properties !== undefined) {
-            // make a deep copy of the properties to avoid modifying the original
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            properties = JSON.parse(JSON.stringify(properties));
-            assert(properties !== undefined);
-
-            const mode = this._options.color.mode.value;
-            const property = this._options.color.property.value;
-            for (let i = 0; i < properties.length; i++) {
-                const value = properties[i][property];
-                if (typeof value === "number") {
-                    if (mode === 'log') {
-                        properties[i][property] = Math.log10(value);
-                    } else if (mode === 'sqrt') {
-                        properties[i][property] = Math.sqrt(value);
-                    } else if (mode === 'inverse') {
-                        properties[i][property] = 1 / value;
-                    }
-                }
+        // --- transform the properties to facilitate the colorization ---
+        // To initialize an empty object to store the transformed properties
+        const transformedProperties: Record<string, (number | undefined)[]> | undefined = {};
+        // To loop through the original properties and transform them
+        properties?.forEach((obj) => {
+          for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+              if (!transformedProperties[key]) {
+                transformedProperties[key] = [];
+              }
+              transformedProperties[key].push(obj[key]);
             }
-        }
+          }
+        });
+        // To store the transformed properties
+        this._properties = transformedProperties;
+        // --- end of transformation and storage of the properties ---
 
         let previousDefaultCutoff = undefined;
         if (this._highlighted !== undefined) {
@@ -506,8 +500,8 @@ export class MoleculeViewer {
 
             if (this._properties !== undefined) {
                 if (
-                    this._properties.some((record) =>
-                        Object.values(record).some((v) => v === undefined)
+                    Object.values(this._properties || {}).some((prop) =>
+                        prop.some((v) => v === undefined)
                     )
                 ) {
                     sendWarning(
@@ -897,8 +891,8 @@ export class MoleculeViewer {
 
                 if (this._properties !== undefined) {
                     if (
-                        this._properties.some((record) =>
-                            Object.values(record).some((v) => v === undefined)
+                        Object.values(this._properties || {}).some((prop) =>
+                            prop.some((v) => v === undefined)
                         )
                     ) {
                         sendWarning(
@@ -953,43 +947,20 @@ export class MoleculeViewer {
         this._options.color.mode.onchange.push(() => {
 
             // JSON.parse & JSON.stringify to make a deep copy of the properties to avoid modifying the original ones
-            const properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, number | undefined>[];
-            const property = this._options.color.property.value;
-            const mode = this._options.color.mode.value;
+            const properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, (number | undefined)[]>;
+            const property: string = this._options.color.property.value;
+            const mode: string = this._options.color.mode.value;
 
-            if (this._properties !== undefined) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                assert(properties !== undefined);
-
-                for (let i = 0; i < properties.length; i++) {
-                    const value = properties[i][property];
-                    if (typeof value === "number") {
-                        if (mode === 'log') {
-                            if (value <= 0 || isNaN(value)) { 
-                                properties[i][property] = NaN;
-                            } else { 
-                                properties[i][property] = Math.log10(value);
-                            }
-                        } else if (mode === 'sqrt') {
-                            if (value <= 0 || isNaN(value)) { 
-                                properties[i][property] = NaN; 
-                            } else { 
-                                properties[i][property] = Math.sqrt(value);
-                            }
-                        } else if (mode === 'inverse') {
-                            if (value === 0 || isNaN(value)) { 
-                                properties[i][property] = NaN; 
-                            } else { 
-                                properties[i][property] = 1 / value;
-                            }
-                        }
-                    }
-                }
+            if (mode === 'log') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? Math.log10(Number(value)) : NaN);
+            } else if (mode === 'sqrt') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? Math.sqrt(Number(value)) : NaN);
+            } else if (mode === 'inverse') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? 1 / Number(value) : NaN);
             }
 
             // Use map to extract the specified property values into an array
-            const values: number[] = properties
-                .map((obj) => obj[property])
+            const values: number[] = properties[property]
                 .filter((value) => !isNaN(Number(value))) as number[];
             // To change min and max values when the mode has been changed
             const [min, max]: [number, number] = [Math.min(...values), Math.max(...values)];
@@ -1257,37 +1228,20 @@ export class MoleculeViewer {
     private color_function() {
 
         // JSON.parse & JSON.stringify to make a deep copy of the properties to avoid modifying the original ones
-        let properties = [] as Record<string, number | undefined>[];
+        let properties: Record<string, (number | undefined)[]> | undefined = {};
         const property: string = this._options.color.property.value;
-        const mode = this._options.color.mode.value;
+        const mode: string = this._options.color.mode.value;
 
         if (this._properties !== undefined) {
             // JSON.parse & JSON.stringify to make a deep copy of the properties to avoid modifying the original ones
-            properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, number | undefined>[];
+            properties = JSON.parse(JSON.stringify(this._properties)) as Record<string, (number | undefined)[]>;
 
-            for (let i = 0; i < properties.length; i++) {
-                const value = properties[i][property];
-                if (typeof value === "number") {
-                    if (mode === 'log') {
-                        if (value <= 0 || isNaN(value)) { 
-                            properties[i][property] = NaN;
-                        } else { 
-                            properties[i][property] = Math.log10(value);
-                        }
-                    } else if (mode === 'sqrt') {
-                        if (value <= 0 || isNaN(value)) { 
-                            properties[i][property] = NaN; 
-                        } else { 
-                            properties[i][property] = Math.sqrt(value);
-                        }
-                    } else if (mode === 'inverse') {
-                        if (value === 0 || isNaN(value)) { 
-                            properties[i][property] = NaN; 
-                        } else { 
-                            properties[i][property] = 1 / value;
-                        }
-                    }
-                }
+            if (mode === 'log') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? Math.log10(Number(value)) : NaN);
+            } else if (mode === 'sqrt') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? Math.sqrt(Number(value)) : NaN);
+            } else if (mode === 'inverse') {
+                properties[property] = properties[property].map((value) => !isNaN(Number(value)) ? 1 / Number(value) : NaN);
             }
         }
 
@@ -1306,10 +1260,10 @@ export class MoleculeViewer {
 
         if (property !== 'element') {
             return (atom: $3Dmol.AtomSpec) => {
-                if (isNaN(Number(properties[Number(atom.serial)]?.[property]))) {
+                if (isNaN(Number(properties?.[property]?.[Number(atom.serial)]))) {
                     return "gray";
                 } else {
-                    return grad.valueToHex(Number(properties[Number(atom.serial)]?.[property]));
+                    return grad.valueToHex(Number(properties?.[property]?.[Number(atom.serial)]));
                 }
             };
         }
